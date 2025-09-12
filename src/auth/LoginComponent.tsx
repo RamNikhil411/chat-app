@@ -8,9 +8,12 @@ import { LoginAPI, SignUpAPI } from "@/http/services/auth";
 import { useForm } from "@tanstack/react-form";
 import { updateUserStore } from "@/store/userDetails";
 import Cookies from "js-cookie";
+import { useNavigate } from "@tanstack/react-router";
 
 export const LoginScreen = () => {
   const [isSignUp, setIsSignUp] = useState(false);
+
+  const navigate = useNavigate();
 
   const form = useForm({
     defaultValues: {
@@ -58,6 +61,7 @@ export const LoginScreen = () => {
       Cookies.set("token", access_token);
       Cookies.set("refreshToken", refresh_token);
       updateUserStore(userDetails);
+      navigate({ to: "/chat" });
     },
   });
 

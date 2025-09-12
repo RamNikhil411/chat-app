@@ -9,6 +9,7 @@ import {
 } from "@tanstack/react-router";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import appCss from "global.css?url";
+import favicon from "/favicon.png?url";
 
 const queryClient = new QueryClient();
 
@@ -26,10 +27,15 @@ export const Route = createRootRoute({
         title: "TanStack Start Starter",
       },
     ],
+
     links: [
       {
         rel: "stylesheet",
         href: appCss,
+      },
+      {
+        rel: "icon",
+        href: favicon,
       },
     ],
   }),
