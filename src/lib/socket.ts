@@ -8,7 +8,7 @@ export const initSocket = () => {
     const token = Cookies.get("token");
     if (!token) throw new Error("User token not found");
 
-    socket = io(import.meta.env.VITE_PUBLIC_SOCKET_URL, {
+    socket = io("wss://api-chat-app-io.onrender.com", {
       reconnectionDelayMax: 10000,
       query: { token },
     });
