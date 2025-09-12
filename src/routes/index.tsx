@@ -12,13 +12,13 @@ function RouteComponent() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const token = Cookies.get("Token"); // Replace "Token" with your cookie key
+    const token = Cookies.get("token");
     if (token) {
       navigate({ to: "/chat" });
     } else {
       navigate({ to: "/login" });
     }
-    // Optional: small delay to show the loader smoothly
+
     setTimeout(() => setLoading(false), 300);
   }, [navigate]);
 

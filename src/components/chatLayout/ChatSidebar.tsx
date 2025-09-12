@@ -5,8 +5,17 @@ import { Badge } from "@/components/ui/badge";
 import { Search, MoreVertical, MessageSquarePlus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { useMutation, useQuery } from "@tanstack/react-query";
+import {
+  AddConversationAPI,
+  GetConversationsAPI,
+  GetUsersAPI,
+} from "@/http/services/chat";
+import { Popover, PopoverContent, PopoverTrigger } from "../ui/popover";
+import { useState } from "react";
+import mapChatApiToUI from "utils/helpers/mapConversationData";
 
-interface Chat {
+export interface Chat {
   id: string;
   name: string;
   lastMessage: string;
@@ -19,78 +28,66 @@ interface Chat {
 }
 
 interface ChatSidebarProps {
-  selectedChat: string | null;
-  onSelectChat: (chatId: string) => void;
+  selectedChat: User | null;
+  onSelectChat: (chat: User) => void;
+}
+interface User {
+  id: number;
+  first_name: string;
+  last_name: string;
+  email: string;
 }
 
 export const ChatSidebar = ({
   selectedChat,
   onSelectChat,
 }: ChatSidebarProps) => {
-  const chats: Chat[] = [
-    {
-      id: "1",
-      name: "Sarah Johnson",
-      lastMessage: "Hey! How's your day going?",
-      time: "2:30 PM",
-      unread: 2,
-      avatar: "",
-      isOnline: true,
-      isGroup: false,
+  const { data: UsersData } = useQuery({
+    queryKey: ["users"],
+    queryFn: async () => {
+      const response = await GetUsersAPI();
+      return response?.data?.data?.records;
     },
-    {
-      id: "2",
-      name: "Team Alpha",
-      lastMessage: "Mike: The project looks great!",
-      time: "1:45 PM",
-      unread: 5,
-      avatar: "",
-      isOnline: false,
-      isGroup: true,
+    refetchOnWindowFocus: false,
+    refetchOnMount: false,
+  });
+
+  const { mutate: createChat } = useMutation({
+    mutationKey: ["createChat"],
+    mutationFn: async (payload: { receiver_id: number }) => {
+      const response = await AddConversationAPI(payload);
+      return response;
     },
-    {
-      id: "3",
-      name: "Alex Chen",
-      lastMessage: "Thanks for the help earlier",
-      time: "12:20 PM",
-      unread: 0,
-      avatar: "",
-      isOnline: false,
-      isGroup: false,
-      lastSeen: "last seen 1 hour ago",
+  });
+
+  const { data: conversations } = useQuery({
+    queryKey: ["conversations"],
+    queryFn: async () => {
+      const response = await GetConversationsAPI();
+      const data = response?.data?.data;
+      console.log(data);
+      return mapChatApiToUI(data);
     },
-    {
-      id: "4",
-      name: "Design Team",
-      lastMessage: "Emma: New mockups are ready",
-      time: "11:30 AM",
-      unread: 1,
-      avatar: "",
-      isOnline: false,
-      isGroup: true,
-    },
-    {
-      id: "5",
-      name: "Maria Garcia",
-      lastMessage: "See you tomorrow!",
-      time: "Yesterday",
-      unread: 0,
-      avatar: "",
-      isOnline: true,
-      isGroup: false,
-    },
-    {
-      id: "6",
-      name: "John Smith",
-      lastMessage: "The meeting went well",
-      time: "Yesterday",
-      unread: 0,
-      avatar: "",
-      isOnline: false,
-      isGroup: false,
-      lastSeen: "last seen yesterday",
-    },
-  ];
+    refetchOnWindowFocus: false,
+    refetchOnMount: false,
+  });
+
+  console.log(conversations);
+
+  const [searchTerm, setSearchTerm] = useState("");
+
+  const filteredUsers = UsersData?.filter((user: User) => {
+    const fullName = `${user.first_name} ${user.last_name}`.toLowerCase();
+    return (
+      fullName.includes(searchTerm.toLowerCase()) ||
+      user.email.toLowerCase().includes(searchTerm.toLowerCase())
+    );
+  });
+
+  const handleCreateChat = (user: User) => {
+    createChat({ receiver_id: user.id });
+    onSelectChat(user);
+  };
 
   return (
     <div className="w-80 bg-secondary border-r border-border flex flex-col">
@@ -101,13 +98,71 @@ export const ChatSidebar = ({
             Chats
           </h2>
           <div className="flex items-center gap-2">
-            <Button
-              size="sm"
-              variant="ghost"
-              className="text-secondary-foreground hover:bg-secondary-foreground/10"
-            >
-              <MessageSquarePlus className="w-5 h-5" />
-            </Button>
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="text-secondary-foreground hover:bg-secondary-foreground/10"
+                >
+                  <MessageSquarePlus className="w-5 h-5" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent
+                align="start"
+                className="w-80 p-2 bg-secondary shadow-lg rounded-xl"
+              >
+                <h3 className="text-sm font-medium text-secondary-foreground mb-2">
+                  Start new chat
+                </h3>
+
+                {/* Search Users */}
+                <div className="relative mb-2">
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                  <Input
+                    placeholder="Search users..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="pl-10 bg-secondary-foreground/5 border-secondary-foreground/10 text-secondary-foreground placeholder:text-secondary-foreground/60"
+                  />
+                </div>
+
+                {/* User List */}
+                <ScrollArea className="h-64">
+                  {filteredUsers?.length > 0 ? (
+                    filteredUsers.map((user: User) => {
+                      const fullName = `${user.first_name} ${user.last_name}`;
+                      return (
+                        <div
+                          key={user.id}
+                          onClick={() => handleCreateChat(user)}
+                          className="flex items-center gap-3 p-2 rounded-lg cursor-pointer hover:bg-secondary-foreground/5"
+                        >
+                          <Avatar className="w-10 h-10">
+                            <AvatarFallback>
+                              {user.first_name.charAt(0).toUpperCase()}
+                              {user.last_name.charAt(0).toUpperCase()}
+                            </AvatarFallback>
+                          </Avatar>
+                          <div className="flex-1">
+                            <p className="font-medium text-sm text-secondary-foreground truncate">
+                              {fullName}
+                            </p>
+                            <p className="text-xs text-muted-foreground truncate">
+                              {user.email}
+                            </p>
+                          </div>
+                        </div>
+                      );
+                    })
+                  ) : (
+                    <p className="text-sm text-muted-foreground p-3 text-center">
+                      No users found
+                    </p>
+                  )}
+                </ScrollArea>
+              </PopoverContent>
+            </Popover>
             <Button
               size="sm"
               variant="ghost"
@@ -131,13 +186,12 @@ export const ChatSidebar = ({
       {/* Chat List */}
       <ScrollArea className="flex-1">
         <div className="p-2">
-          {chats.map((chat, index) => (
+          {conversations?.map((chat, index) => (
             <div
               key={chat.id}
-              onClick={() => onSelectChat(chat.id)}
               className={cn(
                 "flex items-center gap-3 p-3 rounded-lg cursor-pointer transition-all duration-200 animate-fade-in hover:scale-[1.02]",
-                selectedChat === chat.id
+                selectedChat?.id === parseInt(chat.id)
                   ? "bg-primary/10 border border-primary/20 shadow-md"
                   : "hover:bg-secondary-foreground/5 hover:shadow-sm"
               )}

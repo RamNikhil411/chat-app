@@ -15,6 +15,8 @@ import {
   Search,
   Users,
 } from "lucide-react";
+import { getUserState } from "@/store/userDetails";
+import { initSocket } from "@/lib/socket";
 
 interface Message {
   id: string;
@@ -25,12 +27,19 @@ interface Message {
   avatar?: string;
   sender?: string;
 }
-
+interface User {
+  id: number;
+  first_name: string;
+  last_name: string;
+  email: string;
+}
 interface ChatAreaProps {
-  selectedChat: string | null;
+  selectedChat: User | null;
 }
 
 export const ChatArea = ({ selectedChat }: ChatAreaProps) => {
+  const { user: userDetails } = getUserState();
+  console.log(userDetails);
   const [message, setMessage] = useState("");
   const [showFileUpload, setShowFileUpload] = useState(false);
   const [messages, setMessages] = useState<Message[]>([
@@ -85,38 +94,77 @@ export const ChatArea = ({ selectedChat }: ChatAreaProps) => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
+  useEffect(() => {
+    if (!selectedChat) return;
+
+    const socket = initSocket();
+
+    const handleIncomingMessage = (data: any) => {
+      if (data.type === "direct:message:new") {
+        const msg = data.payload;
+        if (msg.from === selectedChat.id) {
+          setMessages((prev) => [
+            ...prev,
+            {
+              id: String(Date.now()),
+              text: msg.content,
+              time: new Date().toLocaleTimeString([], {
+                hour: "2-digit",
+                minute: "2-digit",
+              }),
+              isSent: false,
+              status: "delivered",
+            },
+          ]);
+        }
+      }
+    };
+
+    socket.on("message", handleIncomingMessage);
+
+    return () => {
+      socket.off("message", handleIncomingMessage);
+    };
+  }, [selectedChat]);
+
   const handleSendMessage = () => {
-    if (message.trim()) {
-      const newMessage: Message = {
-        id: String(messages.length + 1),
-        text: message,
-        time: new Date().toLocaleTimeString([], {
-          hour: "2-digit",
-          minute: "2-digit",
-        }),
-        isSent: true,
-        status: "sent",
-      };
-      setMessages([...messages, newMessage]);
-      setMessage("");
+    if (!message.trim() || !selectedChat) return;
 
-      // Simulate status updates
-      setTimeout(() => {
-        setMessages((prev) =>
-          prev.map((msg) =>
-            msg.id === newMessage.id ? { ...msg, status: "delivered" } : msg
-          )
-        );
-      }, 1000);
+    const newMessage: Message = {
+      id: String(Date.now()),
+      text: message,
+      time: new Date().toLocaleTimeString([], {
+        hour: "2-digit",
+        minute: "2-digit",
+      }),
+      isSent: true,
+      status: "sent",
+    };
 
-      setTimeout(() => {
-        setMessages((prev) =>
-          prev.map((msg) =>
-            msg.id === newMessage.id ? { ...msg, status: "seen" } : msg
-          )
-        );
-      }, 3000);
-    }
+    setMessages([...messages, newMessage]);
+    setMessage("");
+
+    const socket = initSocket();
+    socket.emit("message:send", {
+      receiverId: selectedChat.id,
+      content: newMessage.text,
+    });
+
+    setTimeout(() => {
+      setMessages((prev) =>
+        prev.map((msg) =>
+          msg.id === newMessage.id ? { ...msg, status: "delivered" } : msg
+        )
+      );
+    }, 1000);
+
+    setTimeout(() => {
+      setMessages((prev) =>
+        prev.map((msg) =>
+          msg.id === newMessage.id ? { ...msg, status: "seen" } : msg
+        )
+      );
+    }, 3000);
   };
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
@@ -127,7 +175,6 @@ export const ChatArea = ({ selectedChat }: ChatAreaProps) => {
   };
 
   const handleFilesSelected = (files: any[]) => {
-    // Create file messages
     files.forEach((filePreview) => {
       const newMessage: Message = {
         id: String(messages.length + 1 + Math.random()),
@@ -162,8 +209,15 @@ export const ChatArea = ({ selectedChat }: ChatAreaProps) => {
     );
   }
 
+  console.log(
+    selectedChat.email,
+    userDetails.email,
+    selectedChat.email === userDetails.email
+  );
+
   const chatInfo = {
-    name: "Sarah Johnson",
+    id: selectedChat.id,
+    name: `${selectedChat.first_name} ${selectedChat.last_name} `,
     avatar: "",
     isOnline: true,
     isGroup: false,
@@ -192,7 +246,7 @@ export const ChatArea = ({ selectedChat }: ChatAreaProps) => {
             )}
           </div>
           <div>
-            <h3 className="font-medium text-foreground">{chatInfo.name}</h3>
+            <h3 className="font-medium text-foreground">{`${chatInfo.name} ${selectedChat.email === userDetails.email ? "(You)" : ""}`}</h3>
             <p className="text-xs text-muted-foreground">
               {chatInfo.isGroup
                 ? `${chatInfo.members} members`

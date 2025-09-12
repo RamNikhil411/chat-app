@@ -60,7 +60,7 @@ export const LoginScreen = () => {
       const { access_token, refresh_token, ...userDetails } = response.data;
       Cookies.set("token", access_token);
       Cookies.set("refreshToken", refresh_token);
-      updateUserStore(userDetails);
+      updateUserStore({ user: userDetails });
       navigate({ to: "/chat" });
     },
   });
