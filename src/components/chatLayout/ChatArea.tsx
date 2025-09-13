@@ -2,7 +2,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { initSocket } from "@/lib/socket";
+import { getSocket, initSocket } from "@/lib/socket";
 import { getUserState } from "@/store/userDetails";
 import {
   MoreVertical,
@@ -17,6 +17,7 @@ import {
 import { useEffect, useRef, useState } from "react";
 import { FileUpload } from "./FileUpload";
 import { MessageBubble } from "./MessageBubble";
+import { Socket } from "socket.io-client";
 
 interface Message {
   id: string;
@@ -39,7 +40,8 @@ interface ChatAreaProps {
 
 export const ChatArea = ({ selectedChat }: ChatAreaProps) => {
   const { user: userDetails } = getUserState();
-  console.log(userDetails);
+  const socket = getSocket();
+
   const [message, setMessage] = useState("");
   const [showFileUpload, setShowFileUpload] = useState(false);
   const [messages, setMessages] = useState<Message[]>([
@@ -99,9 +101,6 @@ export const ChatArea = ({ selectedChat }: ChatAreaProps) => {
   useEffect(() => {
     if (!selectedChat) return;
 
-    const socket = initSocket();
-
-    // Incoming messages
     const handleIncomingMessage = (data: any) => {
       if (data.type === "direct:message:new") {
         const msg = data.payload;
@@ -123,7 +122,6 @@ export const ChatArea = ({ selectedChat }: ChatAreaProps) => {
       }
     };
 
-    // Typing events
     const handleTyping = (data: any) => {
       if (data.payload.chatId !== selectedChat.id) return;
 
@@ -131,12 +129,12 @@ export const ChatArea = ({ selectedChat }: ChatAreaProps) => {
       if (data.type === "typing:stop") setOtherUserTyping(false);
     };
 
-    socket.on("message", handleIncomingMessage);
-    socket.on("message", handleTyping);
+    socket?.on("message", handleIncomingMessage);
+    socket?.on("message", handleTyping);
 
     return () => {
-      socket.off("message", handleIncomingMessage);
-      socket.off("message", handleTyping);
+      socket?.off("message", handleIncomingMessage);
+      socket?.off("message", handleTyping);
     };
   }, [selectedChat]);
 
@@ -157,8 +155,7 @@ export const ChatArea = ({ selectedChat }: ChatAreaProps) => {
     setMessages([...messages, newMessage]);
     setMessage("");
 
-    const socket = initSocket();
-    socket.emit("message", {
+    socket?.emit("message", {
       type: "message:send",
       payload: {
         receiverId: selectedChat.id,
@@ -188,8 +185,7 @@ export const ChatArea = ({ selectedChat }: ChatAreaProps) => {
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setMessage(e.target.value);
 
-    const socket = initSocket();
-    socket.emit("message", {
+    socket?.emit("message", {
       type: "typing:start",
       payload: {
         receiverId: selectedChat?.id,
@@ -200,7 +196,7 @@ export const ChatArea = ({ selectedChat }: ChatAreaProps) => {
 
     clearTimeout(typingTimeout);
     typingTimeout = setTimeout(() => {
-      socket.emit("message", {
+      socket?.emit("message", {
         type: "typing:stop",
         payload: {
           receiverId: selectedChat?.id,
@@ -208,7 +204,7 @@ export const ChatArea = ({ selectedChat }: ChatAreaProps) => {
           chatId: selectedChat?.id,
         },
       });
-    }, 1000); // stops typing if no input for 1s
+    }, 1000);
   };
 
   const handleKeyPress = (e: React.KeyboardEvent) => {

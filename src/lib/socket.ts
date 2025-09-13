@@ -4,16 +4,16 @@ import Cookies from "js-cookie";
 let socket: Socket | null = null;
 
 export const initSocket = () => {
+  if (typeof window === "undefined") return;
   if (!socket) {
     const token = Cookies.get("token");
     if (!token) throw new Error("User token not found");
 
-    // Use environment variable
     const SOCKET_URL = import.meta.env.VITE_PUBLIC_SOCKET_URL;
     console.log(SOCKET_URL);
     if (!SOCKET_URL) throw new Error("SOCKET_URL not defined in env");
 
-    socket = io(SOCKET_URL, {
+    socket = io("wss://api-chat-app-io.onrender.com", {
       reconnectionDelayMax: 10000,
       query: {
         token: token,
@@ -25,6 +25,11 @@ export const initSocket = () => {
 };
 
 export const getSocket = () => {
-  if (!socket) throw new Error("Socket not initialized");
+  if (!socket) {
+    console.warn(
+      "⚠️ Socket not initialized, calling initSocket() automatically"
+    );
+    return initSocket();
+  }
   return socket;
 };
