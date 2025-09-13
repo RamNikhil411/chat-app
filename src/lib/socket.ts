@@ -13,7 +13,7 @@ export const initSocket = () => {
     console.log(SOCKET_URL);
     if (!SOCKET_URL) throw new Error("SOCKET_URL not defined in env");
 
-    socket = io(SOCKET_URL, {
+    socket = io("wss://api-chat-app-io.onrender.com", {
       reconnectionDelayMax: 10000,
       query: {
         token: token,

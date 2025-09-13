@@ -76,6 +76,75 @@
   --sidebar-accent-foreground: oklch(0.205 0 0);
   --sidebar-border: oklch(0.922 0 0);
   --sidebar-ring: oklch(0.708 0 0);
+  --background: 0 0% 100%;
+  --foreground: 222.2 84% 4.9%;
+
+  --card: oklch(100% 0.00011 271.152);
+  --card-foreground: oklch(13.628% 0.03642 259.217);
+  --popover: oklch(100% 0.00011 271.152);
+  --popover-foreground: oklch(13.628% 0.03642 259.217);
+  --primary: oklch(76.356% 0.20264 149.677);
+  --primary-foreground: oklch(100% 0.00011 271.152);
+  --primary-light: oklch(79.313% 0.19337 150.919);
+  --primary-dark: oklch(65.675% 0.17267 149.75);
+
+  --secondary: oklch(26.624% 0.00949 248.261);
+  --secondary-foreground: oklch(98.511% 0.00011 271.152);
+
+  --muted: oklch(96.696% 0.00298 264.792);
+  --muted-foreground: oklch(55.102% 0.02343 264.389);
+
+  --accent: oklch(97.181% 0.02377 159.407);
+  --accent-foreground: oklch(40.261% 0.10156 150.315);
+
+  --destructive: oklch(63.681% 0.20784 25.315);
+  --destructive-foreground: oklch(98.415% 0.00352 248.585);
+
+  --border: oklch(92.758% 0.00592 264.656);
+  --input: oklch(92.758% 0.00592 264.656);
+  --ring: oklch(76.356% 0.20264 149.677);
+
+  --chat-bg: oklch(96.696% 0.00298 264.792);
+  --chat-bubble-sent: oklch(76.356% 0.20264 149.677);
+  --chat-bubble-received: oklch(100% 0.00011 271.152);
+  --chat-sidebar: oklch(26.624% 0.00949 248.261);
+  --chat-header: oklch(70.647% 0.18728 149.548);
+  --online-status: oklch(73.234% 0.24918 142.511);
+  --message-time: oklch(55.102% 0.02343 264.389);
+  --seen-status: oklch(76.356% 0.20264 149.677);
+
+  --gradient-chat: linear-gradient(
+    135deg,
+    hsl(var(--primary)),
+    hsl(var(--primary-light))
+  );
+  --gradient-header: linear-gradient(
+    90deg,
+    hsl(var(--chat-header)),
+    hsl(var(--primary))
+  );
+
+  --radius: 0.75rem;
+
+  --animation-duration: 300ms;
+  --animation-timing: cubic-bezier(0.4, 0, 0.2, 1);
+  --bounce-timing: cubic-bezier(0.68, -0.55, 0.265, 1.55);
+
+  --sidebar-background: 0 0% 98%;
+
+  --sidebar-foreground: 240 5.3% 26.1%;
+
+  --sidebar-primary: 240 5.9% 10%;
+
+  --sidebar-primary-foreground: 0 0% 98%;
+
+  --sidebar-accent: 240 4.8% 95.9%;
+
+  --sidebar-accent-foreground: 240 5.9% 10%;
+
+  --sidebar-border: 220 13% 91%;
+
+  --sidebar-ring: 217.2 91.2% 59.8%;
 }
 
 .dark {
