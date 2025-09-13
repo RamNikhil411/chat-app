@@ -8,9 +8,17 @@ export const initSocket = () => {
     const token = Cookies.get("token");
     if (!token) throw new Error("User token not found");
 
-    socket = io("wss://api-chat-app-io.onrender.com", {
+    // Use environment variable
+    const SOCKET_URL = import.meta.env.VITE_PUBLIC_SOCKET_URL;
+    console.log(SOCKET_URL);
+    if (!SOCKET_URL) throw new Error("SOCKET_URL not defined in env");
+
+    socket = io(SOCKET_URL, {
       reconnectionDelayMax: 10000,
-      query: { token },
+      query: {
+        token: token,
+      },
+      transports: ["websocket"],
     });
   }
   return socket;

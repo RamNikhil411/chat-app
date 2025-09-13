@@ -1,22 +1,22 @@
-import { useState, useRef, useEffect } from "react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { MessageBubble } from "./MessageBubble";
-import { FileUpload } from "./FileUpload";
-import {
-  Phone,
-  Video,
-  MoreVertical,
-  Smile,
-  Paperclip,
-  Send,
-  Search,
-  Users,
-} from "lucide-react";
-import { getUserState } from "@/store/userDetails";
 import { initSocket } from "@/lib/socket";
+import { getUserState } from "@/store/userDetails";
+import {
+  MoreVertical,
+  Paperclip,
+  Phone,
+  Search,
+  Send,
+  Smile,
+  Users,
+  Video,
+} from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { FileUpload } from "./FileUpload";
+import { MessageBubble } from "./MessageBubble";
 
 interface Message {
   id: string;
@@ -87,6 +87,8 @@ export const ChatArea = ({ selectedChat }: ChatAreaProps) => {
     },
   ]);
 
+  const [otherUserTyping, setOtherUserTyping] = useState(false);
+
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -99,6 +101,7 @@ export const ChatArea = ({ selectedChat }: ChatAreaProps) => {
 
     const socket = initSocket();
 
+    // Incoming messages
     const handleIncomingMessage = (data: any) => {
       if (data.type === "direct:message:new") {
         const msg = data.payload;
@@ -120,10 +123,20 @@ export const ChatArea = ({ selectedChat }: ChatAreaProps) => {
       }
     };
 
+    // Typing events
+    const handleTyping = (data: any) => {
+      if (data.payload.chatId !== selectedChat.id) return;
+
+      if (data.type === "typing:start") setOtherUserTyping(true);
+      if (data.type === "typing:stop") setOtherUserTyping(false);
+    };
+
     socket.on("message", handleIncomingMessage);
+    socket.on("message", handleTyping);
 
     return () => {
       socket.off("message", handleIncomingMessage);
+      socket.off("message", handleTyping);
     };
   }, [selectedChat]);
 
@@ -145,9 +158,12 @@ export const ChatArea = ({ selectedChat }: ChatAreaProps) => {
     setMessage("");
 
     const socket = initSocket();
-    socket.emit("message:send", {
-      receiverId: selectedChat.id,
-      content: newMessage.text,
+    socket.emit("message", {
+      type: "message:send",
+      payload: {
+        receiverId: selectedChat.id,
+        content: newMessage.text,
+      },
     });
 
     setTimeout(() => {
@@ -165,6 +181,34 @@ export const ChatArea = ({ selectedChat }: ChatAreaProps) => {
         )
       );
     }, 3000);
+  };
+
+  let typingTimeout: NodeJS.Timeout;
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setMessage(e.target.value);
+
+    const socket = initSocket();
+    socket.emit("message", {
+      type: "typing:start",
+      payload: {
+        receiverId: selectedChat?.id,
+        from: userDetails.id,
+        conversationId: selectedChat?.id,
+      },
+    });
+
+    clearTimeout(typingTimeout);
+    typingTimeout = setTimeout(() => {
+      socket.emit("message", {
+        type: "typing:stop",
+        payload: {
+          receiverId: selectedChat?.id,
+          from: userDetails.id,
+          chatId: selectedChat?.id,
+        },
+      });
+    }, 1000); // stops typing if no input for 1s
   };
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
@@ -290,7 +334,7 @@ export const ChatArea = ({ selectedChat }: ChatAreaProps) => {
       </div>
 
       {/* Messages Area */}
-      <ScrollArea className="flex-1 p-4" ref={scrollAreaRef}>
+      <ScrollArea className="flex-1 p-4 overflow-auto " ref={scrollAreaRef}>
         <div className="space-y-4">
           {messages.map((msg, index) => (
             <div
@@ -302,6 +346,11 @@ export const ChatArea = ({ selectedChat }: ChatAreaProps) => {
             </div>
           ))}
           <div ref={messagesEndRef} />
+          {otherUserTyping && (
+            <div className="text-sm text-muted-foreground ml-2 mb-1">
+              {selectedChat.first_name} is typing...
+            </div>
+          )}
         </div>
       </ScrollArea>
 
@@ -320,7 +369,7 @@ export const ChatArea = ({ selectedChat }: ChatAreaProps) => {
           <div className="flex-1 relative">
             <Input
               value={message}
-              onChange={(e) => setMessage(e.target.value)}
+              onChange={handleInputChange}
               onKeyPress={handleKeyPress}
               placeholder="Type a message..."
               className="pr-12 py-3 min-h-[44px] rounded-xl"
