@@ -247,29 +247,54 @@ export const ChatArea = ({
 
   let typingTimeout: NodeJS.Timeout;
 
+  const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const typingActiveRef = useRef(false);
+
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setMessage(e.target.value);
+    const value = e.target.value;
+    setMessage(value);
 
-    socket?.emit("message", {
-      type: "typing:start",
-      payload: {
-        receiverId: selectedChat?.id,
-        from: userDetails.id,
-        conversationId: selectedConversation?.conversation_id,
-      },
-    });
+    if (!socket || !selectedChat || !selectedConversation) return;
 
-    clearTimeout(typingTimeout);
-    typingTimeout = setTimeout(() => {
-      socket?.emit("message", {
-        type: "typing:stop",
+    if (!typingActiveRef.current) {
+      socket.emit("message", {
+        type: "typing:start",
         payload: {
-          receiverId: selectedChat?.id,
+          receiverId: selectedChat.id,
           from: userDetails.id,
-          conversationId: selectedConversation?.conversation_id,
+          conversationId: selectedConversation.conversation_id,
         },
       });
+      typingActiveRef.current = true;
+    }
+
+    // Reset the timer for typing:stop
+    if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+
+    typingTimeoutRef.current = setTimeout(() => {
+      socket.emit("message", {
+        type: "typing:stop",
+        payload: {
+          receiverId: selectedChat.id,
+          from: userDetails.id,
+          conversationId: selectedConversation.conversation_id,
+        },
+      });
+      typingActiveRef.current = false;
     }, 1000);
+
+    if (value.trim() === "") {
+      if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+      socket.emit("message", {
+        type: "typing:stop",
+        payload: {
+          receiverId: selectedChat.id,
+          from: userDetails.id,
+          conversationId: selectedConversation.conversation_id,
+        },
+      });
+      typingActiveRef.current = false;
+    }
   };
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
