@@ -25,3 +25,12 @@ export const GetConversationsAPI = async () => {
     return error;
   }
 };
+
+export const SendMessageAPI = async (payload) => {
+  try {
+    const response = await $fetch.post("messages", payload);
+    return response;
+  } catch (error) {
+    return error;
+  }
+};

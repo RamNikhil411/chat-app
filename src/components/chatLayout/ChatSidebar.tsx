@@ -2,7 +2,12 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
-import { Search, MoreVertical, MessageSquarePlus } from "lucide-react";
+import {
+  Search,
+  MoreVertical,
+  MessageSquarePlus,
+  NewspaperIcon,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useMutation, useQuery } from "@tanstack/react-query";
@@ -30,6 +35,7 @@ export interface Chat {
 interface ChatSidebarProps {
   selectedChat: User | null;
   onSelectChat: (chat: User) => void;
+  onSelectConversation: (conversation: any) => void;
 }
 interface User {
   id: number;
@@ -41,6 +47,7 @@ interface User {
 export const ChatSidebar = ({
   selectedChat,
   onSelectChat,
+  onSelectConversation,
 }: ChatSidebarProps) => {
   const { data: UsersData } = useQuery({
     queryKey: ["users"],
@@ -56,7 +63,13 @@ export const ChatSidebar = ({
     mutationKey: ["createChat"],
     mutationFn: async (payload: { receiver_id: number }) => {
       const response = await AddConversationAPI(payload);
-      return response;
+      return response?.data?.data;
+    },
+
+    onSuccess: (newConversation) => {
+      if (newConversation) {
+        onSelectConversation(newConversation);
+      }
     },
   });
 
@@ -65,14 +78,12 @@ export const ChatSidebar = ({
     queryFn: async () => {
       const response = await GetConversationsAPI();
       const data = response?.data?.data;
-      console.log(data);
+      // console.log(data);
       return mapChatApiToUI(data);
     },
     refetchOnWindowFocus: false,
     refetchOnMount: false,
   });
-
-  console.log(conversations);
 
   const [searchTerm, setSearchTerm] = useState("");
 

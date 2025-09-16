@@ -13,6 +13,10 @@ interface User {
 export const ChatLayout = () => {
   const [selectedChat, setSelectedChat] = useState<User | null>(null);
 
+  const [selectConversation, setSelectConversation] = useState<any | null>(
+    null
+  );
+
   useEffect(() => {
     const socket = initSocket();
 
@@ -37,8 +41,15 @@ export const ChatLayout = () => {
 
   return (
     <div className="flex h-screen bg-chat-bg">
-      <ChatSidebar selectedChat={selectedChat} onSelectChat={setSelectedChat} />
-      <ChatArea selectedChat={selectedChat} />
+      <ChatSidebar
+        selectedChat={selectedChat}
+        onSelectChat={setSelectedChat}
+        onSelectConversation={setSelectConversation}
+      />
+      <ChatArea
+        selectedChat={selectedChat}
+        selectedConversation={selectConversation}
+      />
     </div>
   );
 };

@@ -18,6 +18,8 @@ import { useEffect, useRef, useState } from "react";
 import { FileUpload } from "./FileUpload";
 import { MessageBubble } from "./MessageBubble";
 import { Socket } from "socket.io-client";
+import { SendMessageAPI } from "@/http/services/chat";
+import { useMutation } from "@tanstack/react-query";
 
 interface Message {
   id: string;
@@ -36,15 +38,20 @@ interface User {
 }
 interface ChatAreaProps {
   selectedChat: User | null;
+  selectedConversation: any;
 }
 
-export const ChatArea = ({ selectedChat }: ChatAreaProps) => {
+export const ChatArea = ({
+  selectedChat,
+  selectedConversation,
+}: ChatAreaProps) => {
   const { user: userDetails } = getUserState();
   const socket = getSocket();
 
   const [message, setMessage] = useState("");
   const [showFileUpload, setShowFileUpload] = useState(false);
-  const [messages, setMessages] = useState<Message[]>([
+  const [curMsgId, setCurMsgId] = useState("");
+  const [messages, setMessages] = useState<any[]>([
     {
       id: "1",
       text: "Hey! How's your day going?",
@@ -59,40 +66,19 @@ export const ChatArea = ({ selectedChat }: ChatAreaProps) => {
       isSent: true,
       status: "seen",
     },
-    {
-      id: "3",
-      text: "That's awesome! How did it go?",
-      time: "2:33 PM",
-      isSent: false,
-      status: "seen",
-    },
-    {
-      id: "4",
-      text: "Really well! The team loved the new design concepts. We're moving forward with the project next week.",
-      time: "2:35 PM",
-      isSent: true,
-      status: "delivered",
-    },
-    {
-      id: "5",
-      text: "Congratulations! 🎉 You've been working so hard on this.",
-      time: "2:36 PM",
-      isSent: false,
-      status: "seen",
-    },
-    {
-      id: "6",
-      text: "Thank you! Want to celebrate with coffee tomorrow?",
-      time: "2:37 PM",
-      isSent: true,
-      status: "sent",
-    },
   ]);
 
   const [otherUserTyping, setOtherUserTyping] = useState(false);
 
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const conversationRef = useRef(selectedConversation);
+
+  useEffect(() => {
+    if (selectedConversation) {
+      conversationRef.current = selectedConversation;
+    }
+  }, [selectedConversation]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -120,6 +106,26 @@ export const ChatArea = ({ selectedChat }: ChatAreaProps) => {
           ]);
         }
       }
+
+      if (data.type === "direct:message:ack") {
+        setMessages((prev) =>
+          prev.map((msg) =>
+            msg.id === data.payload.messageId
+              ? { ...msg, status: "delivered" }
+              : msg
+          )
+        );
+
+        setCurMsgId(data.payload.messageId);
+      }
+
+      if (data.type === "message:read:ack") {
+        setMessages((prev) =>
+          prev.map((msg) =>
+            msg.id === data.payload.messageId ? { ...msg, status: "seen" } : msg
+          )
+        );
+      }
     };
 
     const handleTyping = (data: any) => {
@@ -138,47 +144,106 @@ export const ChatArea = ({ selectedChat }: ChatAreaProps) => {
     };
   }, [selectedChat]);
 
+  const { mutate: sendMessage } = useMutation({
+    mutationKey: ["sendMessage"],
+    mutationFn: SendMessageAPI,
+    onMutate: async (payload) => {
+      const tempId = `temp-${Date.now()}`;
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: tempId,
+          text: payload.content,
+          time: new Date().toLocaleTimeString([], {
+            hour: "2-digit",
+            minute: "2-digit",
+          }),
+          isSent: true,
+          status: "sending",
+        },
+      ]);
+      setMessage("");
+      return { tempId };
+    },
+    onSuccess: (response, _variables, context) => {
+      // Replace temp message with real one
+
+      const savedMessage = response?.data?.data;
+
+      setMessages((prev) =>
+        prev.map((msg) =>
+          msg.id === context?.tempId
+            ? {
+                ...msg,
+                id: savedMessage.id,
+                status: "sent",
+                time: new Date().toLocaleTimeString([], {
+                  hour: "2-digit",
+                  minute: "2-digit",
+                }),
+              }
+            : msg
+        )
+      );
+
+      // Emit socket event after backend confirms
+      socket?.emit("message", {
+        type: "message:send",
+        payload: {
+          messageId: savedMessage?.id,
+          conversationId: selectedConversation?.conversation_id,
+          receiverId: selectedChat?.id,
+          content: savedMessage?.content,
+        },
+      });
+    },
+    onError: (_error, _variables, context) => {
+      // Mark the temp message as failed
+      setMessages((prev) =>
+        prev.map((msg) =>
+          msg.id === context?.tempId ? { ...msg, status: "failed" as any } : msg
+        )
+      );
+    },
+  });
+
   const handleSendMessage = () => {
-    if (!message.trim() || !selectedChat) return;
+    if (!message.trim() || !selectedChat || !selectedConversation) return;
 
-    const newMessage: Message = {
-      id: String(Date.now()),
-      text: message,
-      time: new Date().toLocaleTimeString([], {
-        hour: "2-digit",
-        minute: "2-digit",
-      }),
-      isSent: true,
-      status: "sent",
-    };
-
-    setMessages([...messages, newMessage]);
-    setMessage("");
-
-    socket?.emit("message", {
-      type: "message:send",
-      payload: {
-        receiverId: selectedChat.id,
-        content: newMessage.text,
-      },
+    sendMessage({
+      conversation_id: selectedConversation?.conversation_id,
+      content: message,
     });
-
-    setTimeout(() => {
-      setMessages((prev) =>
-        prev.map((msg) =>
-          msg.id === newMessage.id ? { ...msg, status: "delivered" } : msg
-        )
-      );
-    }, 1000);
-
-    setTimeout(() => {
-      setMessages((prev) =>
-        prev.map((msg) =>
-          msg.id === newMessage.id ? { ...msg, status: "seen" } : msg
-        )
-      );
-    }, 3000);
   };
+
+  // ✅ Mark incoming messages as seen when chat is open
+  useEffect(() => {
+    if (!selectedChat || messages.length === 0) return;
+
+    const unseenMessages = messages.filter(
+      (msg) => !msg.isSent && msg.status !== "seen"
+    );
+
+    if (unseenMessages.length > 0) {
+      unseenMessages.forEach((msg) => {
+        socket?.emit("message", {
+          type: "message:read",
+          payload: {
+            messageId: msg.id,
+            receiverId: selectedChat.id,
+          },
+        });
+      });
+
+      setMessages((prev) =>
+        prev.map((msg) =>
+          !msg.isSent && msg.status !== "seen"
+            ? { ...msg, status: "seen" }
+            : msg
+        )
+      );
+    }
+  }, [messages, selectedChat, socket]);
 
   let typingTimeout: NodeJS.Timeout;
 
@@ -190,7 +255,7 @@ export const ChatArea = ({ selectedChat }: ChatAreaProps) => {
       payload: {
         receiverId: selectedChat?.id,
         from: userDetails.id,
-        conversationId: selectedChat?.id,
+        conversationId: selectedConversation?.conversation_id,
       },
     });
 
@@ -201,7 +266,7 @@ export const ChatArea = ({ selectedChat }: ChatAreaProps) => {
         payload: {
           receiverId: selectedChat?.id,
           from: userDetails.id,
-          chatId: selectedChat?.id,
+          conversationId: selectedConversation?.conversation_id,
         },
       });
     }, 1000);
