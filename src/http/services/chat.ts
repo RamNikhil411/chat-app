@@ -1,7 +1,7 @@
 import { $fetch } from "../fetch";
-export const GetUsersAPI = async () => {
+export const GetUsersAPI = async (queryParams: any) => {
   try {
-    const response = await $fetch.get("users");
+    const response = await $fetch.get("users", queryParams);
     return response;
   } catch (error) {
     return error;

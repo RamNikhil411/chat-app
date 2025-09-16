@@ -2,7 +2,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { getSocket, initSocket } from "@/lib/socket";
+import { getSocket } from "@/lib/socket";
 import { getUserState } from "@/store/userDetails";
 import {
   MoreVertical,

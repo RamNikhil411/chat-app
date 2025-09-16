@@ -2,18 +2,19 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
-import { Search, MoreVertical, MessageSquarePlus } from "lucide-react";
+import { Search, MoreVertical, MessageSquarePlus, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useInfiniteQuery, useMutation, useQuery } from "@tanstack/react-query";
 import {
   AddConversationAPI,
   GetConversationsAPI,
   GetUsersAPI,
 } from "@/http/services/chat";
 import { Popover, PopoverContent, PopoverTrigger } from "../ui/popover";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import mapChatApiToUI from "utils/helpers/mapConversationData";
+import { c } from "node_modules/vite/dist/node/moduleRunnerTransport.d-DJ_mE5sf";
 
 export interface Chat {
   id: string;
@@ -42,15 +43,31 @@ export const ChatSidebar = ({
   selectedChat,
   onSelectChat,
 }: ChatSidebarProps) => {
-  const { data: UsersData } = useQuery({
+  const {
+    data: UsersQueryData,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+    isLoading,
+  } = useInfiniteQuery({
     queryKey: ["users"],
-    queryFn: async () => {
-      const response = await GetUsersAPI();
-      return response?.data?.data?.records;
+    queryFn: async ({ pageParam = 1 }) => {
+      let queryParams = { page: pageParam, page_size: 10 };
+      const response = await GetUsersAPI(pageParam);
+
+      return response?.data?.data;
     },
-    refetchOnWindowFocus: false,
-    refetchOnMount: false,
+    initialPageParam: 1,
+    getNextPageParam: (lastPage) => {
+      const currentPage = lastPage?.pagination_info?.current_page;
+      const totalPages = lastPage?.pagination_info?.total_pages;
+      return currentPage && currentPage < totalPages ? currentPage + 1 : null;
+    },
   });
+
+  const UsersData = UsersQueryData?.pages?.map((page) => page?.records).flat();
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
 
   const { mutate: createChat } = useMutation({
     mutationKey: ["createChat"],
@@ -77,21 +94,43 @@ export const ChatSidebar = ({
   const [searchTerm, setSearchTerm] = useState("");
 
   const filteredUsers = UsersData?.filter((user: User) => {
-    const fullName = `${user.first_name} ${user.last_name}`.toLowerCase();
+    const fullName = `${user?.first_name} ${user?.last_name}`.toLowerCase();
     return (
       fullName.includes(searchTerm.toLowerCase()) ||
-      user.email.toLowerCase().includes(searchTerm.toLowerCase())
+      user?.email.toLowerCase().includes(searchTerm.toLowerCase())
     );
   });
+
+  console.log(filteredUsers);
 
   const handleCreateChat = (user: User) => {
     createChat({ receiver_id: user.id });
     onSelectChat(user);
   };
 
+  useEffect(() => {
+    if (!scrollRef.current) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting && hasNextPage && !isFetchingNextPage) {
+          fetchNextPage?.();
+        }
+      },
+      {
+        root: containerRef.current,
+        rootMargin: "0px",
+        threshold: 1.0,
+      }
+    );
+
+    observer.observe(scrollRef.current);
+
+    return () => observer.disconnect();
+  }, [fetchNextPage, hasNextPage, isFetchingNextPage]);
+
   return (
     <div className="w-80 bg-secondary border-r border-border flex flex-col">
-      {/* Header */}
       <div className="p-4 border-b border-border">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-xl font-semibold text-secondary-foreground">
@@ -128,33 +167,43 @@ export const ChatSidebar = ({
                 </div>
 
                 {/* User List */}
-                <ScrollArea className="h-64">
-                  {filteredUsers?.length > 0 ? (
-                    filteredUsers.map((user: User) => {
-                      const fullName = `${user.first_name} ${user.last_name}`;
-                      return (
-                        <div
-                          key={user.id}
-                          onClick={() => handleCreateChat(user)}
-                          className="flex items-center gap-3 p-2 rounded-lg cursor-pointer hover:bg-secondary-foreground/5"
-                        >
-                          <Avatar className="w-10 h-10">
-                            <AvatarFallback>
-                              {user.first_name.charAt(0).toUpperCase()}
-                              {user.last_name.charAt(0).toUpperCase()}
-                            </AvatarFallback>
-                          </Avatar>
-                          <div className="flex-1">
-                            <p className="font-medium text-sm text-secondary-foreground truncate">
-                              {fullName}
-                            </p>
-                            <p className="text-xs text-muted-foreground truncate">
-                              {user.email}
-                            </p>
+                <ScrollArea ref={containerRef} className="h-64">
+                  {filteredUsers && filteredUsers?.length > 0 ? (
+                    <div>
+                      {filteredUsers?.map((user: User) => {
+                        const fullName = `${user?.first_name} ${user?.last_name}`;
+                        return (
+                          <div
+                            key={user?.id}
+                            onClick={() => handleCreateChat(user)}
+                            className="flex items-center gap-3 p-2 rounded-lg cursor-pointer hover:bg-secondary-foreground/5"
+                          >
+                            <Avatar className="w-10 h-10">
+                              <AvatarFallback>
+                                {user?.first_name?.charAt(0).toUpperCase()}
+                                {user?.last_name?.charAt(0).toUpperCase()}
+                              </AvatarFallback>
+                            </Avatar>
+                            <div className="flex-1">
+                              <p className="font-medium text-sm text-secondary-foreground truncate">
+                                {fullName}
+                              </p>
+                              <p className="text-xs text-muted-foreground truncate">
+                                {user?.email}
+                              </p>
+                            </div>
                           </div>
+                        );
+                      })}
+                      {hasNextPage && (
+                        <div
+                          ref={scrollRef}
+                          className="flex items-center justify-center gap-3 p-2 rounded-lg cursor-pointer  hover:bg-secondary-foreground/5"
+                        >
+                          <Loader2 className="w-5 h-5 animate-spin text-secondary-foreground " />
                         </div>
-                      );
-                    })
+                      )}
+                    </div>
                   ) : (
                     <p className="text-sm text-muted-foreground p-3 text-center">
                       No users found

@@ -2,13 +2,14 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
-import { MessageCircle, Users, Shield, Zap } from "lucide-react";
+import { MessageCircle, Users, Shield, Zap, Loader2 } from "lucide-react";
 import { useMutation } from "@tanstack/react-query";
 import { LoginAPI, SignUpAPI } from "@/http/services/auth";
 import { useForm } from "@tanstack/react-form";
 import { updateUserStore } from "@/store/userDetails";
 import Cookies from "js-cookie";
 import { useNavigate } from "@tanstack/react-router";
+import { connectSocket } from "@/lib/socket";
 
 export const LoginScreen = () => {
   const [isSignUp, setIsSignUp] = useState(false);
@@ -61,6 +62,7 @@ export const LoginScreen = () => {
       Cookies.set("token", access_token);
       Cookies.set("refreshToken", refresh_token);
       updateUserStore({ user: userDetails });
+      connectSocket(access_token);
       navigate({ to: "/chat" });
     },
   });
@@ -274,6 +276,9 @@ export const LoginScreen = () => {
               type="submit"
               className="w-full h-12 bg-primary hover:bg-primary-dark text-white font-medium"
             >
+              {(signUpLoading || loginLoading) && (
+                <Loader2 className="mr-2 animate-spin" />
+              )}{" "}
               {isSignUp ? "Create Account" : "Sign In"}
             </Button>
           </form>
@@ -284,7 +289,7 @@ export const LoginScreen = () => {
                 setIsSignUp(!isSignUp);
                 form.reset();
               }}
-              className="text-primary hover:text-primary-dark font-medium"
+              className="text-primary cursor-pointer hover:text-primary-dark font-medium"
             >
               {isSignUp
                 ? "Already have an account? Sign in"
