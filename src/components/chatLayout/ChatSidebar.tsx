@@ -1,20 +1,19 @@
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Badge } from "@/components/ui/badge";
-import { Search, MoreVertical, MessageSquarePlus, Loader2 } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
-import { useInfiniteQuery, useMutation, useQuery } from "@tanstack/react-query";
 import {
   AddConversationAPI,
   GetConversationsAPI,
   GetUsersAPI,
 } from "@/http/services/chat";
-import { Popover, PopoverContent, PopoverTrigger } from "../ui/popover";
+import { cn } from "@/lib/utils";
+import { useInfiniteQuery, useMutation, useQuery } from "@tanstack/react-query";
+import { Loader2, MessageSquarePlus, MoreVertical, Search } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import mapChatApiToUI from "utils/helpers/mapConversationData";
-import { c } from "node_modules/vite/dist/node/moduleRunnerTransport.d-DJ_mE5sf";
+import { Popover, PopoverContent, PopoverTrigger } from "../ui/popover";
 
 export interface Chat {
   id: string;
@@ -31,6 +30,7 @@ export interface Chat {
 interface ChatSidebarProps {
   selectedChat: User | null;
   onSelectChat: (chat: User) => void;
+  onSelectConversation: (conversation: any) => void;
 }
 interface User {
   id: number;
@@ -42,6 +42,7 @@ interface User {
 export const ChatSidebar = ({
   selectedChat,
   onSelectChat,
+  onSelectConversation,
 }: ChatSidebarProps) => {
   const {
     data: UsersQueryData,
@@ -73,7 +74,13 @@ export const ChatSidebar = ({
     mutationKey: ["createChat"],
     mutationFn: async (payload: { receiver_id: number }) => {
       const response = await AddConversationAPI(payload);
-      return response;
+      return response?.data?.data;
+    },
+
+    onSuccess: (newConversation) => {
+      if (newConversation) {
+        onSelectConversation(newConversation);
+      }
     },
   });
 
@@ -82,14 +89,12 @@ export const ChatSidebar = ({
     queryFn: async () => {
       const response = await GetConversationsAPI();
       const data = response?.data?.data;
-      console.log(data);
+      // console.log(data);
       return mapChatApiToUI(data);
     },
     refetchOnWindowFocus: false,
     refetchOnMount: false,
   });
-
-  console.log(conversations);
 
   const [searchTerm, setSearchTerm] = useState("");
 
