@@ -19,14 +19,19 @@ import { FileUpload } from "./FileUpload";
 import { MessageBubble } from "./MessageBubble";
 import { Socket } from "socket.io-client";
 import { GetMessagesAPI, SendMessageAPI } from "@/http/services/chat";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useInfiniteQuery, useMutation, useQuery } from "@tanstack/react-query";
 import { User } from ".";
 import EmojiPicker from "emoji-picker-react";
+import {
+  groupAndSortMessages,
+  GroupedMessages,
+} from "utils/helpers/sortedMessage";
+import { transformApiMessages } from "utils/helpers/transformMessageApi";
 
 interface Message {
   id: string;
   text: string;
-  time: string;
+  time: Date;
   isSent: boolean;
   status: "sent" | "delivered" | "seen";
   avatar?: string;
@@ -43,37 +48,33 @@ export const ChatArea = ({ selectedChat }: ChatAreaProps) => {
 
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
 
-  const { data: getMessages } = useQuery({
+  const { data: getMessages } = useInfiniteQuery({
     queryKey: ["messages", selectedChat?.conversation_id],
-    queryFn: async () => {
-      const response = await GetMessagesAPI(selectedChat?.conversation_id);
-      return response.data;
+    queryFn: async ({ pageParam = 1 }) => {
+      let queryParams = { page: pageParam, page_size: 10 };
+
+      const response = await GetMessagesAPI(
+        selectedChat?.conversation_id,
+        queryParams
+      );
+      console.log(response);
+      return response?.data?.data;
+    },
+    initialPageParam: 1,
+    getNextPageParam: (lastPage) => {
+      const currentPage = lastPage?.pagination_info?.current_page;
+      const totalPages = lastPage?.pagination_info?.total_pages;
+      return currentPage && currentPage < totalPages ? currentPage + 1 : null;
     },
     enabled: !!selectedChat?.conversation_id,
   });
-
-  console.log(getMessages, "messages");
 
   const [message, setMessage] = useState("");
   const [showFileUpload, setShowFileUpload] = useState(false);
   const [curMsgId, setCurMsgId] = useState("");
 
-  const [messages, setMessages] = useState<any[]>([
-    {
-      id: "1",
-      text: "Hey! How's your day going?",
-      time: "2:30 PM",
-      isSent: false,
-      status: "seen",
-    },
-    {
-      id: "2",
-      text: "It's going great! Just finished the presentation. Thanks for asking 😊",
-      time: "2:32 PM",
-      isSent: true,
-      status: "seen",
-    },
-  ]);
+  const [messages, setMessages] = useState<any[]>([]);
+  const [groupedMessages, setGroupedMessages] = useState<GroupedMessages[]>([]);
 
   const [otherUserTyping, setOtherUserTyping] = useState(false);
 
@@ -83,9 +84,23 @@ export const ChatArea = ({ selectedChat }: ChatAreaProps) => {
   const handleEmojiClick = (emojiData: any) => {
     setMessage((prev) => prev + emojiData.emoji);
   };
-
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [groupedMessages]);
+
+  useEffect(() => {
+    if (!getMessages) return;
+
+    const messagesData =
+      getMessages.pages
+        ?.map((page) => transformApiMessages(page?.records, userDetails.id))
+        .flat() ?? [];
+
+    setMessages(messagesData);
+  }, [getMessages, userDetails.id]);
+
+  useEffect(() => {
+    setGroupedMessages(groupAndSortMessages(messages));
   }, [messages]);
 
   useEffect(() => {
@@ -100,10 +115,7 @@ export const ChatArea = ({ selectedChat }: ChatAreaProps) => {
             {
               id: String(Date.now()),
               text: msg.content,
-              time: new Date().toLocaleTimeString([], {
-                hour: "2-digit",
-                minute: "2-digit",
-              }),
+              time: new Date(),
               isSent: false,
               status: "delivered",
             },
@@ -150,71 +162,28 @@ export const ChatArea = ({ selectedChat }: ChatAreaProps) => {
     };
   }, [selectedChat]);
 
-  const { mutate: sendMessage } = useMutation({
-    mutationKey: ["sendMessage"],
-    mutationFn: SendMessageAPI,
-    onMutate: async (payload) => {
-      const tempId = `temp-${Date.now()}`;
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: tempId,
-          text: payload.content,
-          time: new Date().toLocaleTimeString([], {
-            hour: "2-digit",
-            minute: "2-digit",
-          }),
-          isSent: true,
-          status: "sending",
-        },
-      ]);
-      setMessage("");
-      return { tempId };
-    },
-    onSuccess: (response, _variables, context) => {
-      const savedMessage = response?.data?.data;
-
-      setMessages((prev) =>
-        prev.map((msg) =>
-          msg.id === context?.tempId
-            ? {
-                ...msg,
-                id: savedMessage.id,
-                status: "sent",
-                time: new Date().toLocaleTimeString([], {
-                  hour: "2-digit",
-                  minute: "2-digit",
-                }),
-              }
-            : msg
-        )
-      );
-
-      socket?.emit("message", {
-        type: "message:send",
-        payload: {
-          messageId: savedMessage?.id,
-          conversationId: selectedChat?.conversation_id,
-          receiverId: selectedChat?.id,
-          content: savedMessage?.content,
-        },
-      });
-    },
-    onError: (_error, _variables, context) => {
-      setMessages((prev) =>
-        prev.map((msg) =>
-          msg.id === context?.tempId ? { ...msg, status: "failed" as any } : msg
-        )
-      );
-    },
-  });
-
   const handleSendMessage = () => {
     if (!message.trim() || !selectedChat) return;
 
-    sendMessage({
-      conversation_id: selectedChat?.conversation_id,
-      content: message,
+    const newMsg = {
+      id: String(Date.now()),
+      text: message,
+      time: new Date(),
+      isSent: true,
+      status: "sending",
+    };
+
+    setMessages((prev) => [...prev, newMsg]);
+    setMessage("");
+
+    socket?.emit("message", {
+      type: "message:send",
+      payload: {
+        messageId: newMsg.id,
+        conversationId: selectedChat.conversation_id,
+        receiverId: selectedChat.id,
+        content: newMsg.text,
+      },
     });
   };
 
@@ -309,10 +278,7 @@ export const ChatArea = ({ selectedChat }: ChatAreaProps) => {
       const newMessage: Message = {
         id: String(messages.length + 1 + Math.random()),
         text: `📎 ${filePreview.file.name}`,
-        time: new Date().toLocaleTimeString([], {
-          hour: "2-digit",
-          minute: "2-digit",
-        }),
+        time: new Date(),
         isSent: true,
         status: "sent",
       };
@@ -422,15 +388,19 @@ export const ChatArea = ({ selectedChat }: ChatAreaProps) => {
       {/* Messages Area */}
       <ScrollArea className="flex-1 p-4 overflow-auto " ref={scrollAreaRef}>
         <div className="space-y-4">
-          {messages.map((msg, index) => (
-            <div
-              key={msg.id}
-              className="animate-fade-in"
-              style={{ animationDelay: `${index * 50}ms` }}
-            >
-              <MessageBubble message={msg} />
+          {groupedMessages.map((group) => (
+            <div key={group.date}>
+              <div className="text-center text-xs text-muted-foreground my-2">
+                {group.date}
+              </div>
+              <div className="space-y-4">
+                {group.messages.map((msg) => (
+                  <MessageBubble key={msg.id} message={msg} />
+                ))}
+              </div>
             </div>
           ))}
+
           <div ref={messagesEndRef} />
           {otherUserTyping && (
             <div className="text-sm text-muted-foreground ml-2 mb-1">

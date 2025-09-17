@@ -5,7 +5,7 @@ import { cn } from "@/lib/utils";
 interface Message {
   id: string;
   text: string;
-  time: string;
+  time: Date;
   isSent: boolean;
   status: "sent" | "delivered" | "seen";
   avatar?: string;
@@ -46,8 +46,12 @@ export const MessageBubble = ({ message }: MessageBubbleProps) => {
 
       <div className="flex flex-col items-end gap-1 min-w-fit">
         <span className="text-xs text-muted-foreground opacity-70 group-hover:opacity-100 transition-opacity duration-200">
-          {message.time}
+          {new Date(message.time).toLocaleTimeString([], {
+            hour: "2-digit",
+            minute: "2-digit",
+          })}
         </span>
+
         {message.isSent && (
           <div className="flex items-center transition-transform duration-200 group-hover:scale-110">
             {message.status === "sent" && (
