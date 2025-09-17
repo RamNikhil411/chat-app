@@ -29,7 +29,7 @@ export interface Chat {
 
 interface ChatSidebarProps {
   selectedChat: User | null;
-  onSelectChat: (chat: User) => void;
+  setSelectedChat: React.Dispatch<React.SetStateAction<User | null>>;
   onSelectConversation: (conversation: any) => void;
 }
 interface User {
@@ -41,7 +41,7 @@ interface User {
 
 export const ChatSidebar = ({
   selectedChat,
-  onSelectChat,
+  setSelectedChat,
   onSelectConversation,
 }: ChatSidebarProps) => {
   const {
@@ -74,12 +74,19 @@ export const ChatSidebar = ({
     mutationKey: ["createChat"],
     mutationFn: async (payload: { receiver_id: number }) => {
       const response = await AddConversationAPI(payload);
+      console.log(response, "fhgj");
       return response?.data?.data;
     },
 
     onSuccess: (newConversation) => {
       if (newConversation) {
-        onSelectConversation(newConversation);
+        setSelectedChat((prev) => {
+          if (!prev) return null;
+          return {
+            ...prev,
+            conversation_id: newConversation.conversation_id,
+          };
+        });
       }
     },
   });
@@ -110,7 +117,7 @@ export const ChatSidebar = ({
 
   const handleCreateChat = (user: User) => {
     createChat({ receiver_id: user.id });
-    onSelectChat(user);
+    setSelectedChat(user);
   };
 
   useEffect(() => {

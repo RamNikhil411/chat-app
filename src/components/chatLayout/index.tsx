@@ -4,11 +4,12 @@ import { ChatSidebar } from "./ChatSidebar";
 import { connectSocket, disconnectSocket } from "@/lib/socket";
 import Cookies from "js-cookie";
 
-interface User {
+export interface User {
   id: number;
   first_name: string;
   last_name: string;
   email: string;
+  conversation_id?: number;
 }
 
 export const ChatLayout = () => {
@@ -19,8 +20,8 @@ export const ChatLayout = () => {
   );
 
   useEffect(() => {
-    const token = Cookies.get("token"); // ✅ read token from cookies
-    if (!token) return; // don’t connect if user not logged in
+    const token = Cookies.get("token");
+    if (!token) return;
 
     const socket = connectSocket(token);
 
@@ -46,13 +47,10 @@ export const ChatLayout = () => {
     <div className="flex h-screen bg-chat-bg">
       <ChatSidebar
         selectedChat={selectedChat}
-        onSelectChat={setSelectedChat}
+        setSelectedChat={setSelectedChat}
         onSelectConversation={setSelectConversation}
       />
-      <ChatArea
-        selectedChat={selectedChat}
-        selectedConversation={selectConversation}
-      />
+      <ChatArea selectedChat={selectedChat} />
     </div>
   );
 };

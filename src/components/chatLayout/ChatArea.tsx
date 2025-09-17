@@ -18,8 +18,10 @@ import { useEffect, useRef, useState } from "react";
 import { FileUpload } from "./FileUpload";
 import { MessageBubble } from "./MessageBubble";
 import { Socket } from "socket.io-client";
-import { SendMessageAPI } from "@/http/services/chat";
-import { useMutation } from "@tanstack/react-query";
+import { GetMessagesAPI, SendMessageAPI } from "@/http/services/chat";
+import { useMutation, useQuery } from "@tanstack/react-query";
+import { User } from ".";
+import EmojiPicker from "emoji-picker-react";
 
 interface Message {
   id: string;
@@ -30,27 +32,32 @@ interface Message {
   avatar?: string;
   sender?: string;
 }
-interface User {
-  id: number;
-  first_name: string;
-  last_name: string;
-  email: string;
-}
+
 interface ChatAreaProps {
   selectedChat: User | null;
-  selectedConversation: any;
 }
 
-export const ChatArea = ({
-  selectedChat,
-  selectedConversation,
-}: ChatAreaProps) => {
+export const ChatArea = ({ selectedChat }: ChatAreaProps) => {
   const { user: userDetails } = getUserState();
   const socket = getSocket();
+
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+
+  const { data: getMessages } = useQuery({
+    queryKey: ["messages", selectedChat?.conversation_id],
+    queryFn: async () => {
+      const response = await GetMessagesAPI(selectedChat?.conversation_id);
+      return response.data;
+    },
+    enabled: !!selectedChat?.conversation_id,
+  });
+
+  console.log(getMessages, "messages");
 
   const [message, setMessage] = useState("");
   const [showFileUpload, setShowFileUpload] = useState(false);
   const [curMsgId, setCurMsgId] = useState("");
+
   const [messages, setMessages] = useState<any[]>([
     {
       id: "1",
@@ -72,13 +79,10 @@ export const ChatArea = ({
 
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const conversationRef = useRef(selectedConversation);
 
-  useEffect(() => {
-    if (selectedConversation) {
-      conversationRef.current = selectedConversation;
-    }
-  }, [selectedConversation]);
+  const handleEmojiClick = (emojiData: any) => {
+    setMessage((prev) => prev + emojiData.emoji);
+  };
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -129,8 +133,10 @@ export const ChatArea = ({
     };
 
     const handleTyping = (data: any) => {
-      if (data.payload.chatId !== selectedChat.id) return;
+      console.log(selectedChat);
 
+      if (data.payload.conversationId !== selectedChat?.conversation_id) return;
+      console.log("dhvjk");
       if (data.type === "typing:start") setOtherUserTyping(true);
       if (data.type === "typing:stop") setOtherUserTyping(false);
     };
@@ -166,8 +172,6 @@ export const ChatArea = ({
       return { tempId };
     },
     onSuccess: (response, _variables, context) => {
-      // Replace temp message with real one
-
       const savedMessage = response?.data?.data;
 
       setMessages((prev) =>
@@ -186,19 +190,17 @@ export const ChatArea = ({
         )
       );
 
-      // Emit socket event after backend confirms
       socket?.emit("message", {
         type: "message:send",
         payload: {
           messageId: savedMessage?.id,
-          conversationId: selectedConversation?.conversation_id,
+          conversationId: selectedChat?.conversation_id,
           receiverId: selectedChat?.id,
           content: savedMessage?.content,
         },
       });
     },
     onError: (_error, _variables, context) => {
-      // Mark the temp message as failed
       setMessages((prev) =>
         prev.map((msg) =>
           msg.id === context?.tempId ? { ...msg, status: "failed" as any } : msg
@@ -208,15 +210,14 @@ export const ChatArea = ({
   });
 
   const handleSendMessage = () => {
-    if (!message.trim() || !selectedChat || !selectedConversation) return;
+    if (!message.trim() || !selectedChat) return;
 
     sendMessage({
-      conversation_id: selectedConversation?.conversation_id,
+      conversation_id: selectedChat?.conversation_id,
       content: message,
     });
   };
 
-  // ✅ Mark incoming messages as seen when chat is open
   useEffect(() => {
     if (!selectedChat || messages.length === 0) return;
 
@@ -254,7 +255,7 @@ export const ChatArea = ({
     const value = e.target.value;
     setMessage(value);
 
-    if (!socket || !selectedChat || !selectedConversation) return;
+    if (!socket || !selectedChat) return;
 
     if (!typingActiveRef.current) {
       socket.emit("message", {
@@ -262,13 +263,12 @@ export const ChatArea = ({
         payload: {
           receiverId: selectedChat.id,
           from: userDetails.id,
-          conversationId: selectedConversation.conversation_id,
+          conversationId: selectedChat.conversation_id,
         },
       });
       typingActiveRef.current = true;
     }
 
-    // Reset the timer for typing:stop
     if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
 
     typingTimeoutRef.current = setTimeout(() => {
@@ -277,7 +277,7 @@ export const ChatArea = ({
         payload: {
           receiverId: selectedChat.id,
           from: userDetails.id,
-          conversationId: selectedConversation.conversation_id,
+          conversationId: selectedChat.conversation_id,
         },
       });
       typingActiveRef.current = false;
@@ -290,7 +290,7 @@ export const ChatArea = ({
         payload: {
           receiverId: selectedChat.id,
           from: userDetails.id,
-          conversationId: selectedConversation.conversation_id,
+          conversationId: selectedChat.conversation_id,
         },
       });
       typingActiveRef.current = false;
@@ -463,10 +463,16 @@ export const ChatArea = ({
             <Button
               size="sm"
               variant="ghost"
+              onClick={() => setShowEmojiPicker((prev) => !prev)}
               className="absolute right-2 top-1/2 transform -translate-y-1/2 text-muted-foreground hover:text-foreground hover:scale-110 transition-transform duration-200"
             >
               <Smile className="w-5 h-5" />
             </Button>
+            {showEmojiPicker && (
+              <div className="absolute bottom-12 left-0 z-50">
+                <EmojiPicker onEmojiClick={handleEmojiClick} />
+              </div>
+            )}
           </div>
 
           <Button

@@ -34,3 +34,18 @@ export const SendMessageAPI = async (payload) => {
     return error;
   }
 };
+
+export const GetMessagesAPI = async (
+  conversation_id: number | undefined,
+  queryParams?: any
+) => {
+  try {
+    const response = await $fetch.get(
+      `conversations/${conversation_id}/messages`,
+      queryParams
+    );
+    return response;
+  } catch (error) {
+    return error;
+  }
+};
