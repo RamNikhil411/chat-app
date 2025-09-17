@@ -2,8 +2,11 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { GetMessagesAPI } from "@/http/services/chat";
 import { getSocket } from "@/lib/socket";
 import { getUserState } from "@/store/userDetails";
+import { useInfiniteQuery } from "@tanstack/react-query";
+import EmojiPicker from "emoji-picker-react";
 import {
   MoreVertical,
   Paperclip,
@@ -15,18 +18,14 @@ import {
   Video,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import { FileUpload } from "./FileUpload";
-import { MessageBubble } from "./MessageBubble";
-import { Socket } from "socket.io-client";
-import { GetMessagesAPI, SendMessageAPI } from "@/http/services/chat";
-import { useInfiniteQuery, useMutation, useQuery } from "@tanstack/react-query";
-import { User } from ".";
-import EmojiPicker from "emoji-picker-react";
 import {
   groupAndSortMessages,
   GroupedMessages,
 } from "utils/helpers/sortedMessage";
 import { transformApiMessages } from "utils/helpers/transformMessageApi";
+import { User } from ".";
+import { FileUpload } from "./FileUpload";
+import { MessageBubble } from "./MessageBubble";
 
 interface Message {
   id: string;
@@ -48,7 +47,12 @@ export const ChatArea = ({ selectedChat }: ChatAreaProps) => {
 
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
 
-  const { data: getMessages } = useInfiniteQuery({
+  const {
+    data: getMessages,
+    fetchNextPage,
+    isFetchingNextPage,
+    hasNextPage,
+  } = useInfiniteQuery({
     queryKey: ["messages", selectedChat?.conversation_id],
     queryFn: async ({ pageParam = 1 }) => {
       let queryParams = { page: pageParam, page_size: 10 };
@@ -86,7 +90,26 @@ export const ChatArea = ({ selectedChat }: ChatAreaProps) => {
   };
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [groupedMessages]);
+  }, [groupedMessages, otherUserTyping]);
+
+  const topMessageRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!topMessageRef.current || !hasNextPage) return;
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          fetchNextPage();
+        }
+      },
+      { root: scrollAreaRef.current, threshold: 1 }
+    );
+
+    observer.observe(topMessageRef.current);
+
+    return () => observer.disconnect();
+  }, [topMessageRef, fetchNextPage, hasNextPage]);
 
   useEffect(() => {
     if (!getMessages) return;
@@ -146,6 +169,8 @@ export const ChatArea = ({ selectedChat }: ChatAreaProps) => {
 
     const handleTyping = (data: any) => {
       console.log(selectedChat);
+
+      console.log(data.payload);
 
       if (data.payload.conversationId !== selectedChat?.conversation_id) return;
       console.log("dhvjk");
@@ -322,7 +347,6 @@ export const ChatArea = ({ selectedChat }: ChatAreaProps) => {
 
   return (
     <div className="flex-1 flex flex-col bg-chat-bg">
-      {/* Chat Header */}
       <div className="bg-card border-b border-border p-4 flex items-center justify-between">
         <div className="flex items-center gap-3">
           <div className="relative">
@@ -388,10 +412,11 @@ export const ChatArea = ({ selectedChat }: ChatAreaProps) => {
       {/* Messages Area */}
       <ScrollArea className="flex-1 p-4 overflow-auto " ref={scrollAreaRef}>
         <div className="space-y-4">
+          <div ref={topMessageRef}></div>
           {groupedMessages.map((group) => (
             <div key={group.date}>
               <div className="text-center text-xs text-muted-foreground my-2">
-                {group.date}
+                {group.label}
               </div>
               <div className="space-y-4">
                 {group.messages.map((msg) => (
