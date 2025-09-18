@@ -16,8 +16,10 @@ import mapChatApiToUI from "utils/helpers/mapConversationData";
 import { Popover, PopoverContent, PopoverTrigger } from "../ui/popover";
 
 export interface Chat {
-  id: string;
-  name: string;
+  id: number;
+  first_name: string;
+  last_name: string;
+  email: string;
   lastMessage: string;
   time: string;
   unread: number;
@@ -96,12 +98,14 @@ export const ChatSidebar = ({
     queryFn: async () => {
       const response = await GetConversationsAPI();
       const data = response?.data?.data;
-      // console.log(data);
+
       return mapChatApiToUI(data);
     },
     refetchOnWindowFocus: false,
     refetchOnMount: false,
   });
+
+  console.log(conversations);
 
   const [searchTerm, setSearchTerm] = useState("");
 
@@ -118,6 +122,10 @@ export const ChatSidebar = ({
   const handleCreateChat = (user: User) => {
     createChat({ receiver_id: user.id });
     setSelectedChat(user);
+  };
+
+  const handleSelectChat = (chat: Chat) => {
+    setSelectedChat(chat);
   };
 
   useEffect(() => {
@@ -249,10 +257,11 @@ export const ChatSidebar = ({
         <div className="p-2">
           {conversations?.map((chat, index) => (
             <div
+              onClick={() => handleSelectChat(chat)}
               key={chat.id}
               className={cn(
                 "flex items-center gap-3 p-3 rounded-lg cursor-pointer transition-all duration-200 animate-fade-in hover:scale-[1.02]",
-                selectedChat?.id === parseInt(chat.id)
+                selectedChat?.id === chat.id
                   ? "bg-primary/10 border border-primary/20 shadow-md"
                   : "hover:bg-secondary-foreground/5 hover:shadow-sm"
               )}
@@ -264,10 +273,8 @@ export const ChatSidebar = ({
                   <AvatarFallback className="bg-primary/20 text-primary font-medium">
                     {chat.isGroup
                       ? "👥"
-                      : chat.name
-                          .split(" ")
-                          .map((n) => n[0])
-                          .join("")}
+                      : chat.first_name?.charAt(0).toUpperCase() +
+                        chat.last_name?.charAt(0).toUpperCase()}
                   </AvatarFallback>
                 </Avatar>
                 {chat.isOnline && !chat.isGroup && (
@@ -278,7 +285,7 @@ export const ChatSidebar = ({
               <div className="flex-1 min-w-0">
                 <div className="flex items-center justify-between mb-1">
                   <h3 className="font-medium text-secondary-foreground truncate">
-                    {chat.name}
+                    {chat.first_name} {chat.last_name}
                   </h3>
                   <span className="text-xs text-secondary-foreground/60 flex-shrink-0">
                     {chat.time}

@@ -4,9 +4,8 @@ function mapChatApiToUI(apiChats: any[]): Chat[] {
   const seen = new Set<number>();
 
   return apiChats
-    .filter((chat) => chat.last_message) // ✅ only keep chats with messages
+    .filter((chat) => chat.last_message)
     .filter((chat) => {
-      // ✅ prevent duplicate ids
       if (seen.has(chat.id)) return false;
       seen.add(chat.id);
       return true;
@@ -18,12 +17,11 @@ function mapChatApiToUI(apiChats: any[]): Chat[] {
 
       return {
         id: chat.id.toString(),
-        name:
-          firstName || lastName
-            ? `${firstName} ${lastName}`.trim()
-            : email || "Unknown User",
+        first_name: firstName,
+        last_name: lastName,
+        email,
         lastMessage: chat.last_message?.content || "",
-        time: "", // can map to created_at if available
+        time: "",
         unread: 0,
         avatar: "",
         isOnline: false,
