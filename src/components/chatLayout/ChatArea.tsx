@@ -8,6 +8,7 @@ import { getUserState } from "@/store/userDetails";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import EmojiPicker from "emoji-picker-react";
 import {
+  ArrowDown,
   MoreVertical,
   Paperclip,
   Phone,
@@ -61,7 +62,7 @@ export const ChatArea = ({ selectedChat }: ChatAreaProps) => {
         selectedChat?.conversation_id,
         queryParams
       );
-      console.log(response);
+
       return response?.data?.data;
     },
     initialPageParam: 1,
@@ -81,26 +82,90 @@ export const ChatArea = ({ selectedChat }: ChatAreaProps) => {
   const [groupedMessages, setGroupedMessages] = useState<GroupedMessages[]>([]);
 
   const [otherUserTyping, setOtherUserTyping] = useState(false);
+  const [newMsgCount, setNewMsgCount] = useState(0);
+  const [isBottom, setIsBottom] = useState(true);
 
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const topMessageRef = useRef<HTMLDivElement>(null);
+  const emojiPickerRef = useRef<HTMLDivElement>(null);
 
   const handleEmojiClick = (emojiData: any) => {
     setMessage((prev) => prev + emojiData.emoji);
   };
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [groupedMessages, otherUserTyping]);
 
-  const topMessageRef = useRef<HTMLDivElement>(null);
+  const scrollToBottom = (behavior: ScrollBehavior = "smooth") => {
+    messagesEndRef.current?.scrollIntoView({ behavior });
+  };
 
   useEffect(() => {
-    if (!topMessageRef.current || !hasNextPage) return;
+    const handleClickOutside = (event: MouseEvent) => {
+      if (
+        emojiPickerRef.current &&
+        !emojiPickerRef.current.contains(event.target as Node)
+      ) {
+        setShowEmojiPicker(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, []);
+
+  useEffect(() => {
+    const scrollEl = scrollAreaRef.current?.querySelector(
+      '[data-slot="scroll-area-viewport"]'
+    );
+
+    console.log(scrollEl, "hgjkl");
+    if (!scrollEl) return;
+
+    const handleScroll = () => {
+      const { scrollTop, scrollHeight, clientHeight } = scrollEl as HTMLElement;
+      const atBottom = scrollHeight - scrollTop - clientHeight < 10;
+
+      setIsBottom(atBottom);
+
+      if (atBottom) {
+        setNewMsgCount(0);
+      }
+    };
+
+    scrollEl.addEventListener("scroll", handleScroll);
+    return () => scrollEl.removeEventListener("scroll", handleScroll);
+  }, [selectedChat]);
+
+  useEffect(() => {
+    if (isBottom) {
+      scrollToBottom();
+    }
+  }, [groupedMessages]);
+
+  useEffect(() => {
+    console.log(newMsgCount, "bj");
+  }, [newMsgCount]);
+
+  useEffect(() => {
+    if (!topMessageRef.current) return;
+
+    const scrollEl = scrollAreaRef.current?.querySelector(
+      '[data-slot="scroll-area-viewport"]'
+    ) as HTMLElement;
+    if (!scrollEl || !hasNextPage) return;
 
     const observer = new IntersectionObserver(
       ([entry]) => {
         if (entry.isIntersecting) {
-          fetchNextPage();
+          // Store previous scrollHeight
+          const prevScrollHeight = scrollEl.scrollHeight;
+
+          fetchNextPage().then(() => {
+            const extraOffset = 50;
+            scrollEl.scrollTop =
+              scrollEl.scrollHeight - prevScrollHeight + extraOffset;
+          });
         }
       },
       { root: scrollAreaRef.current, threshold: 1 }
@@ -143,6 +208,10 @@ export const ChatArea = ({ selectedChat }: ChatAreaProps) => {
               status: "delivered",
             },
           ]);
+        }
+
+        if (!isBottom) {
+          setNewMsgCount((prev) => prev + 1);
         }
       }
 
@@ -200,6 +269,8 @@ export const ChatArea = ({ selectedChat }: ChatAreaProps) => {
 
     setMessages((prev) => [...prev, newMsg]);
     setMessage("");
+    scrollToBottom();
+    setNewMsgCount(0);
 
     socket?.emit("message", {
       type: "message:send",
@@ -330,12 +401,6 @@ export const ChatArea = ({ selectedChat }: ChatAreaProps) => {
     );
   }
 
-  console.log(
-    selectedChat.email,
-    userDetails.email,
-    selectedChat.email === userDetails.email
-  );
-
   const chatInfo = {
     id: selectedChat.id,
     name: `${selectedChat.first_name} ${selectedChat.last_name} `,
@@ -409,7 +474,6 @@ export const ChatArea = ({ selectedChat }: ChatAreaProps) => {
         </div>
       </div>
 
-      {/* Messages Area */}
       <ScrollArea className="flex-1 p-4 overflow-auto " ref={scrollAreaRef}>
         <div className="space-y-4">
           <div ref={topMessageRef}></div>
@@ -426,13 +490,28 @@ export const ChatArea = ({ selectedChat }: ChatAreaProps) => {
             </div>
           ))}
 
-          <div ref={messagesEndRef} />
+          <div ref={messagesEndRef} className="" />
           {otherUserTyping && (
             <div className="text-sm text-muted-foreground ml-2 mb-1">
               {selectedChat.first_name} is typing...
             </div>
           )}
         </div>
+
+        {!isBottom && (
+          <Button
+            onClick={() => {
+              scrollToBottom();
+              setNewMsgCount(0);
+            }}
+            className="absolute hover:text-white bg-white text-primary border border-primary right-1/2 translate-x-1/2 bottom-10"
+          >
+            <ArrowDown />
+            {newMsgCount > 0 && (
+              <div className="font-medium text-red-500">{newMsgCount}</div>
+            )}
+          </Button>
+        )}
       </ScrollArea>
 
       {/* Message Input */}
@@ -464,7 +543,10 @@ export const ChatArea = ({ selectedChat }: ChatAreaProps) => {
               <Smile className="w-5 h-5" />
             </Button>
             {showEmojiPicker && (
-              <div className="absolute bottom-12 left-0 z-50">
+              <div
+                ref={emojiPickerRef}
+                className="absolute bottom-12 left-0 z-50"
+              >
                 <EmojiPicker onEmojiClick={handleEmojiClick} />
               </div>
             )}
