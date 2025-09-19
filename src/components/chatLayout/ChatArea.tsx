@@ -316,9 +316,8 @@ export const ChatArea = ({ selectedChat }: ChatAreaProps) => {
     socket?.emit("message", {
       type: "message:send",
       payload: {
-        messageId: newMsg?.id,
         conversationId: selectedChat.conversation_id,
-        receiverId: selectedChat?.id,
+        receiverId: +selectedChat?.id,
         content: newMsg.text,
       },
     });
