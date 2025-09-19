@@ -26,6 +26,7 @@ function mapChatApiToUI(apiChats: any[]): Chat[] {
         avatar: "",
         isOnline: false,
         isGroup: chat.is_group,
+        conversation_id: chat.receiver?.conversation_id,
       };
     });
 }

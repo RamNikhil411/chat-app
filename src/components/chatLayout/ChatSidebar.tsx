@@ -125,6 +125,7 @@ export const ChatSidebar = ({
   };
 
   const handleSelectChat = (chat: Chat) => {
+    console.log(chat);
     setSelectedChat(chat);
   };
 
