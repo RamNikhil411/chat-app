@@ -357,49 +357,59 @@ export const ChatArea = ({ selectedChat }: ChatAreaProps) => {
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const typingActiveRef = useRef(false);
 
+  const TYPING_STOP_DELAY = 500;
+
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
     setMessage(value);
 
     if (!socket || !selectedChat) return;
 
+    // 1. Send typing:start immediately if not already sent
     if (!typingActiveRef.current) {
       socket.emit("message", {
         type: "typing:start",
         payload: {
-          receiverId: selectedChat?.id,
-          from: userDetails?.id,
+          receiverId: selectedChat.id,
+          from: userDetails.id,
           conversationId: selectedChat.conversation_id,
         },
       });
       typingActiveRef.current = true;
     }
 
-    if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+    // 2. Clear previous stop timer
+    if (typingTimeoutRef.current) {
+      clearTimeout(typingTimeoutRef.current);
+    }
 
+    // 3. Set new stop timer
     typingTimeoutRef.current = setTimeout(() => {
       socket.emit("message", {
         type: "typing:stop",
         payload: {
-          receiverId: selectedChat?.id,
-          from: userDetails?.id,
+          receiverId: selectedChat.id,
+          from: userDetails.id,
           conversationId: selectedChat.conversation_id,
         },
       });
       typingActiveRef.current = false;
-    }, 1000);
+      typingTimeoutRef.current = null;
+    }, TYPING_STOP_DELAY);
 
+    // 4. If input cleared, stop immediately
     if (value.trim() === "") {
       if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
       socket.emit("message", {
         type: "typing:stop",
         payload: {
-          receiverId: selectedChat?.id,
-          from: userDetails?.id,
+          receiverId: selectedChat.id,
+          from: userDetails.id,
           conversationId: selectedChat.conversation_id,
         },
       });
       typingActiveRef.current = false;
+      typingTimeoutRef.current = null;
     }
   };
 
@@ -478,7 +488,9 @@ export const ChatArea = ({ selectedChat }: ChatAreaProps) => {
                 ? `${chatInfo.members} members`
                 : chatInfo.isOnline
                   ? "Online"
-                  : "last seen recently"}
+                  : otherUserTyping
+                    ? "Typing..."
+                    : "last seen recently"}
             </p>
           </div>
         </div>
