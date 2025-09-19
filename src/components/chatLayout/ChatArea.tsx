@@ -18,7 +18,7 @@ import {
   Users,
   Video,
 } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import {
   groupAndSortMessages,
   GroupedMessages,
@@ -67,9 +67,10 @@ export const ChatArea = ({ selectedChat }: ChatAreaProps) => {
     },
     initialPageParam: 1,
     getNextPageParam: (lastPage) => {
-      const currentPage = lastPage?.pagination_info?.current_page;
-      const totalPages = lastPage?.pagination_info?.total_pages;
-      return currentPage && currentPage < totalPages ? currentPage + 1 : null;
+      const current = lastPage?.pagination_info?.current_page;
+      const total = lastPage?.pagination_info?.total_pages;
+      if (!current || !total) return undefined;
+      return current < total ? current + 1 : undefined; // only if fetchNextPage is called
     },
     enabled: !!selectedChat?.conversation_id,
   });
@@ -89,6 +90,7 @@ export const ChatArea = ({ selectedChat }: ChatAreaProps) => {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const topMessageRef = useRef<HTMLDivElement>(null);
   const emojiPickerRef = useRef<HTMLDivElement>(null);
+  const isChatSwitchingRef = useRef(false);
 
   const handleEmojiClick = (emojiData: any) => {
     setMessage((prev) => prev + emojiData.emoji);
@@ -113,13 +115,17 @@ export const ChatArea = ({ selectedChat }: ChatAreaProps) => {
       document.removeEventListener("mousedown", handleClickOutside);
     };
   }, []);
+  useEffect(() => {
+    if (selectedChat) {
+      isChatSwitchingRef.current = true;
+    }
+  }, [selectedChat?.conversation_id]);
 
   useEffect(() => {
     const scrollEl = scrollAreaRef.current?.querySelector(
       '[data-slot="scroll-area-viewport"]'
     );
 
-    console.log(scrollEl, "hgjkl");
     if (!scrollEl) return;
 
     const handleScroll = () => {
@@ -137,35 +143,65 @@ export const ChatArea = ({ selectedChat }: ChatAreaProps) => {
     return () => scrollEl.removeEventListener("scroll", handleScroll);
   }, [selectedChat]);
 
-  useEffect(() => {
-    if (isBottom) {
-      scrollToBottom();
+  useLayoutEffect(() => {
+    if (!groupedMessages.length) return;
+
+    const scrollEl = scrollAreaRef.current?.querySelector(
+      '[data-slot="scroll-area-viewport"]'
+    ) as HTMLElement;
+    if (!scrollEl) return;
+
+    // if switching chat, scroll instantly to bottom
+    if (isChatSwitchingRef.current) {
+      scrollEl.scrollTop = scrollEl.scrollHeight;
+      isChatSwitchingRef.current = false;
+      return;
     }
-  }, [groupedMessages]);
+
+    // normal behavior: scroll to bottom only if user was already at bottom
+    if (isBottom) {
+      scrollEl.scrollTop = scrollEl.scrollHeight;
+    }
+  }, [groupedMessages, isBottom]);
 
   useEffect(() => {
     console.log(newMsgCount, "bj");
   }, [newMsgCount]);
 
   useEffect(() => {
-    if (!topMessageRef.current) return;
+    if (!topMessageRef.current || !getMessages) return;
 
     const scrollEl = scrollAreaRef.current?.querySelector(
       '[data-slot="scroll-area-viewport"]'
     ) as HTMLElement;
     if (!scrollEl || !hasNextPage) return;
 
+    let timer: NodeJS.Timeout | null = null;
+
     const observer = new IntersectionObserver(
       ([entry]) => {
         if (entry.isIntersecting) {
-          // Store previous scrollHeight
-          const prevScrollHeight = scrollEl.scrollHeight;
+          // Start a 500ms delay before triggering API
+          if (!timer) {
+            timer = setTimeout(() => {
+              const prevScrollHeight = scrollEl.scrollHeight;
+              console.log("calling API after 500ms delay");
 
-          fetchNextPage().then(() => {
-            const extraOffset = 50;
-            scrollEl.scrollTop =
-              scrollEl.scrollHeight - prevScrollHeight + extraOffset;
-          });
+              fetchNextPage().then(() => {
+                const extraOffset = 50;
+                scrollEl.scrollTop =
+                  scrollEl.scrollHeight - prevScrollHeight + extraOffset;
+              });
+
+              timer = null;
+            }, 500);
+          }
+        } else {
+          // Reset timer if user scrolls away
+          if (timer) {
+            clearTimeout(timer);
+            timer = null;
+          }
         }
       },
       { root: scrollAreaRef.current, threshold: 1 }
@@ -173,19 +209,22 @@ export const ChatArea = ({ selectedChat }: ChatAreaProps) => {
 
     observer.observe(topMessageRef.current);
 
-    return () => observer.disconnect();
-  }, [topMessageRef, fetchNextPage, hasNextPage]);
+    return () => {
+      if (timer) clearTimeout(timer);
+      observer.disconnect();
+    };
+  }, [getMessages, topMessageRef, fetchNextPage, hasNextPage, selectedChat]);
 
   useEffect(() => {
     if (!getMessages) return;
 
     const messagesData =
       getMessages.pages
-        ?.map((page) => transformApiMessages(page?.records, userDetails.id))
+        ?.map((page) => transformApiMessages(page?.records, userDetails?.id))
         .flat() ?? [];
 
     setMessages(messagesData);
-  }, [getMessages, userDetails.id]);
+  }, [getMessages, userDetails?.id]);
 
   useEffect(() => {
     setGroupedMessages(groupAndSortMessages(messages));
@@ -197,7 +236,7 @@ export const ChatArea = ({ selectedChat }: ChatAreaProps) => {
     const handleIncomingMessage = (data: any) => {
       if (data.type === "direct:message:new") {
         const msg = data.payload;
-        if (msg.from === selectedChat.id) {
+        if (msg.from === selectedChat?.id) {
           setMessages((prev) => [
             ...prev,
             {
@@ -218,7 +257,7 @@ export const ChatArea = ({ selectedChat }: ChatAreaProps) => {
       if (data.type === "direct:message:ack") {
         setMessages((prev) =>
           prev.map((msg) =>
-            msg.id === data.payload.messageId
+            msg?.id === data.payload.messageId
               ? { ...msg, status: "delivered" }
               : msg
           )
@@ -230,7 +269,9 @@ export const ChatArea = ({ selectedChat }: ChatAreaProps) => {
       if (data.type === "message:read:ack") {
         setMessages((prev) =>
           prev.map((msg) =>
-            msg.id === data.payload.messageId ? { ...msg, status: "seen" } : msg
+            msg?.id === data.payload.messageId
+              ? { ...msg, status: "seen" }
+              : msg
           )
         );
       }
@@ -275,9 +316,9 @@ export const ChatArea = ({ selectedChat }: ChatAreaProps) => {
     socket?.emit("message", {
       type: "message:send",
       payload: {
-        messageId: newMsg.id,
+        messageId: newMsg?.id,
         conversationId: selectedChat.conversation_id,
-        receiverId: selectedChat.id,
+        receiverId: selectedChat?.id,
         content: newMsg.text,
       },
     });
@@ -295,8 +336,8 @@ export const ChatArea = ({ selectedChat }: ChatAreaProps) => {
         socket?.emit("message", {
           type: "message:read",
           payload: {
-            messageId: msg.id,
-            receiverId: selectedChat.id,
+            messageId: msg?.id,
+            receiverId: selectedChat?.id,
           },
         });
       });
@@ -326,8 +367,8 @@ export const ChatArea = ({ selectedChat }: ChatAreaProps) => {
       socket.emit("message", {
         type: "typing:start",
         payload: {
-          receiverId: selectedChat.id,
-          from: userDetails.id,
+          receiverId: selectedChat?.id,
+          from: userDetails?.id,
           conversationId: selectedChat.conversation_id,
         },
       });
@@ -340,8 +381,8 @@ export const ChatArea = ({ selectedChat }: ChatAreaProps) => {
       socket.emit("message", {
         type: "typing:stop",
         payload: {
-          receiverId: selectedChat.id,
-          from: userDetails.id,
+          receiverId: selectedChat?.id,
+          from: userDetails?.id,
           conversationId: selectedChat.conversation_id,
         },
       });
@@ -353,8 +394,8 @@ export const ChatArea = ({ selectedChat }: ChatAreaProps) => {
       socket.emit("message", {
         type: "typing:stop",
         payload: {
-          receiverId: selectedChat.id,
-          from: userDetails.id,
+          receiverId: selectedChat?.id,
+          from: userDetails?.id,
           conversationId: selectedChat.conversation_id,
         },
       });
@@ -402,7 +443,7 @@ export const ChatArea = ({ selectedChat }: ChatAreaProps) => {
   }
 
   const chatInfo = {
-    id: selectedChat.id,
+    id: selectedChat?.id,
     name: `${selectedChat.first_name} ${selectedChat.last_name} `,
     avatar: "",
     isOnline: true,
@@ -484,7 +525,7 @@ export const ChatArea = ({ selectedChat }: ChatAreaProps) => {
               </div>
               <div className="space-y-4">
                 {group.messages.map((msg) => (
-                  <MessageBubble key={msg.id} message={msg} />
+                  <MessageBubble key={msg?.id} message={msg} />
                 ))}
               </div>
             </div>

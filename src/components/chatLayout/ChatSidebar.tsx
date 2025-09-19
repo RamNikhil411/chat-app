@@ -261,7 +261,7 @@ export const ChatSidebar = ({
               onClick={() => handleSelectChat(chat)}
               key={chat.id}
               className={cn(
-                "flex items-center gap-3 p-3 rounded-lg cursor-pointer transition-all duration-200 animate-fade-in hover:scale-[1.02]",
+                "flex items-center gap-3 p-3 rounded-lg cursor-pointer transition-colors duration-200 animate-fade-in hover:scale-[1.02] focus:outline-none ",
                 selectedChat?.id === chat.id
                   ? "bg-primary/10 border border-primary/20 shadow-md"
                   : "hover:bg-secondary-foreground/5 hover:shadow-sm"
