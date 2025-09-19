@@ -68,7 +68,7 @@ export const ChatSidebar = ({
     },
   });
 
-  const [open, setOpen] = useState(false);
+  // const [open, setOpen] = useState(false);
 
   const UsersData = UsersQueryData?.pages?.map((page) => page?.records).flat();
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -124,7 +124,7 @@ export const ChatSidebar = ({
   const handleCreateChat = (user: User) => {
     createChat({ receiver_id: user.id });
     setSelectedChat(user);
-    setOpen(false);
+    // setOpen(false);
   };
 
   const handleSelectChat = (chat: Chat) => {
@@ -161,7 +161,7 @@ export const ChatSidebar = ({
             Chats
           </h2>
           <div className="flex items-center gap-2">
-            <Popover open={open} onOpenChange={setOpen}>
+            <Popover>
               <PopoverTrigger asChild>
                 <Button
                   size="sm"
