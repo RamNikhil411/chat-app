@@ -318,7 +318,7 @@ export const ChatArea = ({ selectedChat }: ChatAreaProps) => {
       payload: {
         temp_id: newMsg?.id,
         conversationId: selectedChat.conversation_id,
-        receiverId: selectedChat?.id,
+        receiverId: +selectedChat?.id,
         content: newMsg.text,
       },
     });
