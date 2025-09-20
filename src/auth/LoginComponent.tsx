@@ -48,6 +48,7 @@ export const LoginScreen = () => {
     },
     onSuccess: () => {
       setIsSignUp(false);
+      form.reset();
     },
   });
 
