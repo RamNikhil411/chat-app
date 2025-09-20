@@ -16,7 +16,7 @@ function mapChatApiToUI(apiChats: any[]): Chat[] {
       const email = chat.receiver?.email || "";
 
       return {
-        id: chat.id.toString(),
+        id: chat?.receiver?.user_id,
         first_name: firstName,
         last_name: lastName,
         email,

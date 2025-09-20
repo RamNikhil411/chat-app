@@ -261,7 +261,10 @@ export const ChatSidebar = ({
         <div className="p-2">
           {conversations?.map((chat, index) => (
             <div
-              onClick={() => handleSelectChat(chat)}
+              onClick={() => {
+                handleSelectChat(chat);
+                console.log(chat);
+              }}
               key={chat.id}
               className={cn(
                 "flex items-center gap-3 p-3 rounded-lg cursor-pointer transition-colors duration-200 animate-fade-in hover:scale-[1.02] focus:outline-none ",
